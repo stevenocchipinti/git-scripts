@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+require "git"
+require "inquirer"
+
+def get_user_input(prompt, elements, &display_block)
+  results = Ask.checkbox(prompt, elements.map(&display_block))
+  elements.select.with_index { |element,index| results[index] }
+rescue Interrupt
+  exit 0
+end
+
+def build_bash_condition_for(email)
+  <<~EOF
+    [[ \\"\\$GIT_COMMITTER_EMAIL\\" = \\"#{email}\\" ]] || \\
+    [[ \\"\\$GIT_AUTHOR_EMAIL\\" = \\"#{email}\\" ]]
+  EOF
+end
+
+
+begin
+  repo = Git.open(".")
+  elements = repo.log.group_by do |l|
+    { name: l.author.name, email: l.author.email }
+  end.map do |author, commits|
+    author.merge(num_of_commits: commits.size)
+  end
+rescue
+  puts "Could not open git logs"
+  exit 1
+end
+
+
+prompt = "Which authors would you like anonymise?",
+emails_to_replace = get_user_input(prompt, elements) do |element|
+  "#{element[:name]} <#{element[:email]}> (#{element[:num_of_commits]})"
+end
+
+system <<~EOF
+  git filter-branch --env-filter "
+    if #{emails_to_replace.map{|x| build_bash_condition_for(x[:email])}.join(" || ")}
+    then
+      export GIT_COMMITTER_NAME=\"Anonymous\"
+      export GIT_COMMITTER_EMAIL=\"anonymous@example.com\"
+      export GIT_AUTHOR_NAME=\"Anonymous\"
+      export GIT_AUTHOR_EMAIL=\"anonymous@example.com\"
+    fi
+  " --tag-name-filter cat -- --branches --tags
+EOF
