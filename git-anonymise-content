@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+require "set"
+require "tempfile"
+
+SEPARATOR = "[ -.]*"
+
+@regexes = Set.new
+
+def regexify(string)
+  @regexes << string.chars.map do |c|
+    if c =~ /[a-zA-Z]/
+      "[#{c.upcase}#{c.downcase}]"
+    elsif c =~ /\W+/
+      SEPARATOR
+    else
+      c
+    end
+  end.join
+end
+
+print "Hi! What's your name? "
+name = gets.strip
+names = name.split.reject {|n| n.size == 1}
+
+# Full name
+regexify(name)
+# Individual names
+names.each {|n| regexify(n) }
+
+# Combinations with initials
+if names.size > 1
+  regexify("#{names.first[0]} #{names.slice(1, names.size).join(" ")}")
+  regexify("#{names.first} #{names.slice(1, names.size).map {|n| n[0] }.join(" ")}")
+end
+
+
+
+Tempfile.open('anonymiser') do |f|
+  @regexes.each { |r| f.puts "regex:#{r}" }
+  f.flush
+
+  puts
+  puts "I'm going to search for: "
+  puts File.readlines f.path
+
+  system "bfg --no-blob-protection --replace-text #{f.path} ."
+end
