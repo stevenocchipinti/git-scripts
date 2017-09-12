@@ -36,7 +36,7 @@ emails_to_replace = get_user_input(prompt, elements) do |element|
 end
 
 system <<~EOF
-  git filter-branch --env-filter "
+  git filter-branch -f --env-filter "
     if #{emails_to_replace.map{|x| build_bash_condition_for(x[:email])}.join(" || ")}
     then
       export GIT_COMMITTER_NAME=\"Anonymous\"
